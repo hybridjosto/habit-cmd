@@ -346,6 +346,7 @@ func (m modelState) View() string {
 	var contentBuilder strings.Builder
 
 	if m.showNotes {
+		var popupBuilder strings.Builder
 		habit := m.habits[m.selectedHabit]
 		var note string
 		if habit.Type == "general" {
@@ -356,21 +357,37 @@ func (m modelState) View() string {
 		}
 
 		if m.editingNote {
-			contentBuilder.WriteString("Editing note:\n")
-			contentBuilder.WriteString(m.editedNote)
+			popupBuilder.WriteString("Editing note:\n")
+			popupBuilder.WriteString(m.editedNote)
 		} else {
-			contentBuilder.WriteString("Note:\n")
-			contentBuilder.WriteString(note)
+			popupBuilder.WriteString("Note:\n")
+			popupBuilder.WriteString(note)
 		}
 
 		popup = lipgloss.NewStyle().
-			SetString(contentBuilder.String()).
+			SetString(popupBuilder.String()).
 			Border(lipgloss.RoundedBorder()).
 			Padding(1, 2)
 
 	}
 
-	if m.mode == "habits" || m.mode == "adding" {
+	if m.mode == "choosing_habit_type" {
+		var popupBuilder strings.Builder
+		popupBuilder.WriteString("Choose habit type:\n")
+		general := "General"
+		daily := "Daily"
+		if m.newHabitType == "general" {
+			general = selectedHabitStyle.Render(general)
+		}
+		if m.newHabitType == "daily" {
+			daily = selectedHabitStyle.Render(daily)
+		}
+		popupBuilder.WriteString(general + "\n" + daily)
+		popup = lipgloss.NewStyle().
+			SetString(popupBuilder.String()).
+			Border(lipgloss.RoundedBorder()).
+			Padding(1, 2)
+	} else if m.mode == "habits" || m.mode == "adding" {
 		contentBuilder.WriteString("Habits for " + m.dates[m.selected].Format("Mon Jan 02") + "\n\n")
 
 		if len(m.habits) == 0 {
@@ -456,28 +473,34 @@ func (m modelState) View() string {
 	if m.mode == "calendar" {
 		controls = "Calendar: ←/→ navigate | Tab: switch to habits | q: quit"
 	} else if m.mode == "habits" {
-		controls = "Habits: ↑/↓ navigate | Space: toggle | d: delete | a: add | Tab: tasks | q: quit"
+		controls = "Habits: ↑/↓ navigate | Space: toggle | n: notes | e: edit | d: delete | a: add | Tab: tasks | q: quit"
 	} else if m.mode == "tasks" {
 		controls = "Tasks: ↑/↓ navigate | Space: toggle | d: delete | a: add | Tab: stats | q: quit"
 	} else if m.mode == "stats" {
 		controls = "Statistics: View habit streaks and progress | Tab: calendar | q: quit"
+	} else if m.mode == "choosing_habit_type" {
+		controls = "↑/↓ select type | Enter: next | Esc: cancel"
 	} else if m.mode == "adding" {
-		contentBuilder.WriteString("\n" + lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("11")).Render("Add new habit:") + "\n")
+		var popupBuilder strings.Builder
+		popupBuilder.WriteString(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("11")).Render("Add new habit:") + "\n")
 		inputStyle := lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color("12")).
 			Padding(0, 1).
 			Foreground(lipgloss.Color("15"))
-		contentBuilder.WriteString(inputStyle.Render(m.newHabitName+"█") + "\n")
+		popupBuilder.WriteString(inputStyle.Render(m.newHabitName+"█") + "\n")
+		popup = lipgloss.NewStyle().SetString(popupBuilder.String()).Border(lipgloss.RoundedBorder()).Padding(1, 2)
 		controls = "Type habit name | Enter: save | Esc: cancel"
 	} else if m.mode == "adding_task" {
-		contentBuilder.WriteString("\n" + lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("11")).Render("Add new task:") + "\n")
+		var popupBuilder strings.Builder
+		popupBuilder.WriteString(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("11")).Render("Add new task:") + "\n")
 		inputStyle := lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color("12")).
 			Padding(0, 1).
 			Foreground(lipgloss.Color("15"))
-		contentBuilder.WriteString(inputStyle.Render(m.newTaskName+"█") + "\n")
+		popupBuilder.WriteString(inputStyle.Render(m.newTaskName+"█") + "\n")
+		popup = lipgloss.NewStyle().SetString(popupBuilder.String()).Border(lipgloss.RoundedBorder()).Padding(1, 2)
 		controls = "Type task name | Enter: save | Esc: cancel"
 	}
 
