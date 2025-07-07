@@ -17,8 +17,10 @@ var (
 )
 
 type Habit struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ID    string            `json:"id"`
+	Name  string            `json:"name"`
+	Type  string            `json:"type"` // "general" or "daily"
+	Notes map[string]string `json:"notes"`
 }
 
 type HabitCompletion struct {
@@ -71,9 +73,20 @@ func GetHabits() ([]Habit, error) {
 	return habits, err
 }
 
-func AddHabit(id, name string) error {
-	h := Habit{ID: id, Name: name}
+func AddHabit(id, name, habitType string, notes map[string]string) error {
+	h := Habit{ID: id, Name: name, Type: habitType, Notes: notes}
 	data, err := json.Marshal(h)
+	if err != nil {
+		return err
+	}
+	return db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket(habitsBucket)
+		return b.Put([]byte(id), data)
+	})
+}
+
+func UpdateHabit(id string, habit Habit) error {
+	data, err := json.Marshal(habit)
 	if err != nil {
 		return err
 	}

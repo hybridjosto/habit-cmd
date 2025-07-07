@@ -2,14 +2,15 @@
 package tui
 
 import (
-	"fmt"
-	"habit-tracker/model"
-	"strconv"
-	"strings"
-	"time"
+   "fmt"
+   "habit-tracker/model"
+   "strconv"
+   "strings"
+   "time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+   tea "github.com/charmbracelet/bubbletea"
+   "github.com/charmbracelet/lipgloss"
+   "github.com/charmbracelet/bubbles/key"
 )
 
 var (
@@ -46,6 +47,28 @@ var (
 		MarginTop(1)
 )
 
+// keybindings for application commands
+// keybindings for application commands
+var keys = struct {
+   Left, Right, Up, Down, Tab, Enter, Escape, Backspace, Space,
+   N, E, A, D, Q key.Binding
+}{
+   Left:      key.NewBinding(key.WithKeys("left"),      key.WithHelp("←",     "prev day")),
+   Right:     key.NewBinding(key.WithKeys("right"),     key.WithHelp("→",     "next day")),
+   Up:        key.NewBinding(key.WithKeys("up"),        key.WithHelp("↑",     "move up")),
+   Down:      key.NewBinding(key.WithKeys("down"),      key.WithHelp("↓",     "move down")),
+   Tab:       key.NewBinding(key.WithKeys("tab"),       key.WithHelp("⇥",     "switch section")),
+   Enter:     key.NewBinding(key.WithKeys("enter"),     key.WithHelp("⏎",     "confirm")),
+   Escape:    key.NewBinding(key.WithKeys("esc"),       key.WithHelp("esc",   "cancel")),
+   Backspace: key.NewBinding(key.WithKeys("backspace"), key.WithHelp("⌫",     "delete char")),
+   Space:     key.NewBinding(key.WithKeys(" "),         key.WithHelp("space", "toggle")),
+   N:         key.NewBinding(key.WithKeys("n"),         key.WithHelp("n",     "toggle notes")),
+   E:         key.NewBinding(key.WithKeys("e"),         key.WithHelp("e",     "edit note")),
+   A:         key.NewBinding(key.WithKeys("a"),         key.WithHelp("a",     "add")),
+   D:         key.NewBinding(key.WithKeys("d"),         key.WithHelp("d",     "delete")),
+   Q:         key.NewBinding(key.WithKeys("q"),         key.WithHelp("q",     "quit")),
+}
+
 type modelState struct {
 	selected      int
 	today         int
@@ -57,6 +80,10 @@ type modelState struct {
 	mode          string
 	newHabitName  string
 	newTaskName   string
+	showNotes     bool
+	editingNote   bool
+	editedNote    string
+	newHabitType  string
 }
 
 func initialModel() modelState {
@@ -85,129 +112,189 @@ func (m modelState) Init() tea.Cmd {
 }
 
 func (m modelState) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch msg.String() {
-		case "left":
-			if m.mode == "calendar" && m.selected > 0 {
-				m.selected--
-			}
-		case "right":
-			if m.mode == "calendar" && m.selected < 6 {
-				m.selected++
-			}
-		case "up":
-			if m.mode == "habits" && m.selectedHabit > 0 {
-				m.selectedHabit--
-			} else if m.mode == "tasks" && m.selectedTask > 0 {
-				m.selectedTask--
-			}
-		case "down":
-			if m.mode == "habits" && m.selectedHabit < len(m.habits)-1 {
-				m.selectedHabit++
-			} else if m.mode == "tasks" && m.selectedTask < len(m.tasks)-1 {
-				m.selectedTask++
-			}
-		case "tab":
-			if m.mode == "calendar" {
-				m.mode = "habits"
-			} else if m.mode == "habits" {
-				m.mode = "tasks"
-			} else if m.mode == "tasks" {
-				m.mode = "stats"
-			} else if m.mode == "stats" {
-				m.mode = "calendar"
-			}
-		case "enter":
-			if m.mode == "adding" && strings.TrimSpace(m.newHabitName) != "" {
-				habitID := strconv.FormatInt(time.Now().UnixNano(), 10)
-				model.AddHabit(habitID, strings.TrimSpace(m.newHabitName))
-				m.habits, _ = model.GetHabits()
-				m.mode = "habits"
-				m.newHabitName = ""
-			} else if m.mode == "adding_task" && strings.TrimSpace(m.newTaskName) != "" {
-				taskID := strconv.FormatInt(time.Now().UnixNano(), 10)
-				model.AddTask(taskID, strings.TrimSpace(m.newTaskName), "", "")
-				m.tasks, _ = model.GetTasks()
-				m.mode = "tasks"
-				m.newTaskName = ""
-			}
-		case " ":
-			if m.mode == "habits" && len(m.habits) > 0 {
-				dateStr := m.dates[m.selected].Format("2006-01-02")
-				habitID := m.habits[m.selectedHabit].ID
-				model.ToggleHabitCompletion(habitID, dateStr)
-			} else if m.mode == "tasks" && len(m.tasks) > 0 {
-				taskID := m.tasks[m.selectedTask].ID
-				model.ToggleTask(taskID)
-				m.tasks, _ = model.GetTasks()
-			} else if m.mode == "adding" {
-				m.newHabitName += " "
-			} else if m.mode == "adding_task" {
-				m.newTaskName += " "
-			}
-		case "a":
-			if m.mode == "habits" {
-				m.mode = "adding"
-				m.newHabitName = ""
-			} else if m.mode == "tasks" {
-				m.mode = "adding_task"
-				m.newTaskName = ""
-			} else if m.mode == "adding" {
-				m.newHabitName += "a"
-			} else if m.mode == "adding_task" {
-				m.newTaskName += "a"
-			}
-		case "d":
-			if m.mode == "habits" && len(m.habits) > 0 {
-				model.DeleteHabit(m.habits[m.selectedHabit].ID)
-				m.habits, _ = model.GetHabits()
-				if m.selectedHabit >= len(m.habits) && len(m.habits) > 0 {
-					m.selectedHabit = len(m.habits) - 1
-				}
-			} else if m.mode == "tasks" && len(m.tasks) > 0 {
-				model.DeleteTask(m.tasks[m.selectedTask].ID)
-				m.tasks, _ = model.GetTasks()
-				if m.selectedTask >= len(m.tasks) && len(m.tasks) > 0 {
-					m.selectedTask = len(m.tasks) - 1
-				}
-			}
-		case "esc":
-			if m.mode == "adding" {
-				m.mode = "habits"
-				m.newHabitName = ""
-			} else if m.mode == "adding_task" {
-				m.mode = "tasks"
-				m.newTaskName = ""
-			}
-		case "backspace":
-			if m.mode == "adding" && len(m.newHabitName) > 0 {
-				m.newHabitName = m.newHabitName[:len(m.newHabitName)-1]
-			} else if m.mode == "adding_task" && len(m.newTaskName) > 0 {
-				m.newTaskName = m.newTaskName[:len(m.newTaskName)-1]
-			}
-		case "q":
-			if m.mode != "adding" && m.mode != "adding_task" {
-				return m, tea.Quit
-			}
-		default:
-			if m.mode == "adding" && len(msg.String()) == 1 {
-				char := msg.String()
-				if (char >= "a" && char <= "z") || (char >= "A" && char <= "Z") || (char >= "0" && char <= "9") || 
-				   char == "-" || char == "_" || char == "." || char == "," || char == "'" || char == "\"" {
-					m.newHabitName += char
-				}
-			} else if m.mode == "adding_task" && len(msg.String()) == 1 {
-				char := msg.String()
-				if (char >= "a" && char <= "z") || (char >= "A" && char <= "Z") || (char >= "0" && char <= "9") || 
-				   char == "-" || char == "_" || char == "." || char == "," || char == "'" || char == "\"" {
-					m.newTaskName += char
-				}
-			}
-		}
-	}
-	return m, nil
-}
+        if m.editingNote {
+            // handle note editing keybindings
+            if km, ok := msg.(tea.KeyMsg); ok {
+                switch {
+                case key.Matches(km, keys.Enter):
+                    habit := m.habits[m.selectedHabit]
+                    if habit.Notes == nil {
+                        habit.Notes = make(map[string]string)
+                    }
+                    if habit.Type == "general" {
+                        habit.Notes["general"] = m.editedNote
+                    } else {
+                        day := m.dates[m.selected].Weekday().String()
+                        habit.Notes[day] = m.editedNote
+                    }
+                    model.UpdateHabit(habit.ID, habit)
+                    m.habits, _ = model.GetHabits()
+                    m.editingNote = false
+                case key.Matches(km, keys.Escape):
+                    m.editingNote = false
+                case key.Matches(km, keys.Backspace):
+                    if len(m.editedNote) > 0 {
+                        m.editedNote = m.editedNote[:len(m.editedNote)-1]
+                    }
+                default:
+                    // accumulate character input
+                    if len(km.String()) == 1 {
+                        m.editedNote += km.String()
+                    }
+                }
+            }
+            return m, nil
+        }
+
+       switch msg := msg.(type) {
+       case tea.KeyMsg:
+           // general keybindings via bubbletea key.Matches
+           switch {
+           case key.Matches(msg, keys.Left):
+               if m.mode == "calendar" && m.selected > 0 {
+                   m.selected--
+               }
+           case key.Matches(msg, keys.Right):
+               if m.mode == "calendar" && m.selected < 6 {
+                   m.selected++
+               }
+           case key.Matches(msg, keys.Up):
+               if m.mode == "choosing_habit_type" {
+                   m.newHabitType = "general"
+               } else if m.mode == "habits" && m.selectedHabit > 0 {
+                   m.selectedHabit--
+               } else if m.mode == "tasks" && m.selectedTask > 0 {
+                   m.selectedTask--
+               }
+           case key.Matches(msg, keys.Down):
+               if m.mode == "choosing_habit_type" {
+                   m.newHabitType = "daily"
+               } else if m.mode == "habits" && m.selectedHabit < len(m.habits)-1 {
+                   m.selectedHabit++
+               } else if m.mode == "tasks" && m.selectedTask < len(m.tasks)-1 {
+                   m.selectedTask++
+               }
+           case key.Matches(msg, keys.Tab):
+               if m.mode == "calendar" {
+                   m.mode = "habits"
+               } else if m.mode == "habits" {
+                   m.mode = "tasks"
+               } else if m.mode == "tasks" {
+                   m.mode = "stats"
+               } else if m.mode == "stats" {
+                   m.mode = "calendar"
+               }
+           case key.Matches(msg, keys.Enter):
+               if m.mode == "choosing_habit_type" {
+                   m.mode = "adding"
+                   m.newHabitName = ""
+               } else if m.mode == "adding" && strings.TrimSpace(m.newHabitName) != "" {
+                   habitID := strconv.FormatInt(time.Now().UnixNano(), 10)
+                   model.AddHabit(habitID, strings.TrimSpace(m.newHabitName), m.newHabitType, make(map[string]string))
+                   m.habits, _ = model.GetHabits()
+                   m.mode = "habits"
+                   m.newHabitName = ""
+               } else if m.mode == "adding_task" && strings.TrimSpace(m.newTaskName) != "" {
+                   taskID := strconv.FormatInt(time.Now().UnixNano(), 10)
+                   model.AddTask(taskID, strings.TrimSpace(m.newTaskName), "", "")
+                   m.tasks, _ = model.GetTasks()
+                   m.mode = "tasks"
+                   m.newTaskName = ""
+               }
+           case key.Matches(msg, keys.N):
+               if m.mode == "habits" && len(m.habits) > 0 {
+                   m.showNotes = !m.showNotes
+               }
+           case key.Matches(msg, keys.E):
+               if m.showNotes && !m.editingNote {
+                   m.editingNote = true
+                   habit := m.habits[m.selectedHabit]
+                   if habit.Notes == nil {
+                       habit.Notes = make(map[string]string)
+                   }
+                   if habit.Type == "general" {
+                       m.editedNote = habit.Notes["general"]
+                   } else {
+                       day := m.dates[m.selected].Weekday().String()
+                       m.editedNote = habit.Notes[day]
+                   }
+               }
+           case key.Matches(msg, keys.Space):
+               if m.mode == "habits" && len(m.habits) > 0 {
+                   dateStr := m.dates[m.selected].Format("2006-01-02")
+                   model.ToggleHabitCompletion(m.habits[m.selectedHabit].ID, dateStr)
+               } else if m.mode == "tasks" && len(m.tasks) > 0 {
+                   model.ToggleTask(m.tasks[m.selectedTask].ID)
+                   m.tasks, _ = model.GetTasks()
+               } else if m.mode == "adding" {
+                   m.newHabitName += " "
+               } else if m.mode == "adding_task" {
+                   m.newTaskName += " "
+               }
+           case key.Matches(msg, keys.A):
+               if m.mode == "habits" {
+                   m.mode = "choosing_habit_type"
+                   m.newHabitType = "general"
+               } else if m.mode == "tasks" {
+                   m.mode = "adding_task"
+                   m.newTaskName = ""
+               } else if m.mode == "adding" {
+                   m.newHabitName += "a"
+               } else if m.mode == "adding_task" {
+                   m.newTaskName += "a"
+               }
+           case key.Matches(msg, keys.D):
+               if m.mode == "habits" && len(m.habits) > 0 {
+                   model.DeleteHabit(m.habits[m.selectedHabit].ID)
+                   m.habits, _ = model.GetHabits()
+                   if m.selectedHabit >= len(m.habits) && len(m.habits) > 0 {
+                       m.selectedHabit = len(m.habits) - 1
+                   }
+               } else if m.mode == "tasks" && len(m.tasks) > 0 {
+                   model.DeleteTask(m.tasks[m.selectedTask].ID)
+                   m.tasks, _ = model.GetTasks()
+                   if m.selectedTask >= len(m.tasks) && len(m.tasks) > 0 {
+                       m.selectedTask = len(m.tasks) - 1
+                   }
+               }
+           case key.Matches(msg, keys.Escape):
+               if m.showNotes {
+                   m.showNotes = false
+               } else if m.mode == "adding" {
+                   m.mode = "habits"
+                   m.newHabitName = ""
+               } else if m.mode == "adding_task" {
+                   m.mode = "tasks"
+                   m.newTaskName = ""
+               }
+           case key.Matches(msg, keys.Backspace):
+               if m.mode == "adding" && len(m.newHabitName) > 0 {
+                   m.newHabitName = m.newHabitName[:len(m.newHabitName)-1]
+               } else if m.mode == "adding_task" && len(m.newTaskName) > 0 {
+                   m.newTaskName = m.newTaskName[:len(m.newTaskName)-1]
+               }
+           case key.Matches(msg, keys.Q):
+               if m.mode != "adding" && m.mode != "adding_task" {
+                   return m, tea.Quit
+               }
+           default:
+               // default character input for adding modes
+               if m.mode == "adding" && len(msg.String()) == 1 {
+                   char := msg.String()
+                   if (char >= "a" && char <= "z") || (char >= "A" && char <= "Z") || (char >= "0" && char <= "9") ||
+                      char == "-" || char == "_" || char == "." || char == "," || char == "'" || char == "\"" {
+                       m.newHabitName += char
+                   }
+               } else if m.mode == "adding_task" && len(msg.String()) == 1 {
+                   char := msg.String()
+                   if (char >= "a" && char <= "z") || (char >= "A" && char <= "Z") || (char >= "0" && char <= "9") ||
+                      char == "-" || char == "_" || char == "." || char == "," || char == "'" || char == "\"" {
+                       m.newTaskName += char
+                   }
+               }
+           }
+       };
+
 
 func (m modelState) View() string {
 	var dayCards []string
@@ -253,7 +340,33 @@ func (m modelState) View() string {
 
 	weekRow := lipgloss.JoinHorizontal(lipgloss.Top, dayCards...)
 
+	var popup lipgloss.Style
 	var contentBuilder strings.Builder
+
+	if m.showNotes {
+		habit := m.habits[m.selectedHabit]
+		var note string
+		if habit.Type == "general" {
+			note = habit.Notes["general"]
+		} else {
+			day := m.dates[m.selected].Weekday().String()
+			note = habit.Notes[day]
+		}
+
+		if m.editingNote {
+			contentBuilder.WriteString("Editing note:\n")
+			contentBuilder.WriteString(m.editedNote)
+		} else {
+			contentBuilder.WriteString("Note:\n")
+			contentBuilder.WriteString(note)
+		}
+
+		popup = lipgloss.NewStyle().
+			SetString(contentBuilder.String()).
+			Border(lipgloss.RoundedBorder()).
+			Padding(1, 2)
+
+	}
 	
 	if m.mode == "habits" || m.mode == "adding" {
 		contentBuilder.WriteString("Habits for " + m.dates[m.selected].Format("Mon Jan 02") + "\n\n")
@@ -369,7 +482,7 @@ func (m modelState) View() string {
 	contentSection := habitSectionStyle.Render(contentBuilder.String())
 	styledControls := controlsStyle.Render(controls)
 
-	return weekRow + contentSection + styledControls
+	return weekRow + contentSection + styledControls + popup.String()
 }
 
 func StartApp() {
