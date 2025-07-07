@@ -81,3 +81,32 @@ func TestAddingTaskInput(t *testing.T) {
 		t.Fatalf("expected %s, got %s", expected, m.newTaskName)
 	}
 }
+
+func TestArrowKeysMoveDaysInAllModes(t *testing.T) {
+	dbPath := "test.db"
+	if err := model.InitDB(dbPath); err != nil {
+		t.Fatalf("failed to init db: %v", err)
+	}
+	defer func() {
+		model.CloseDB()
+		os.Remove(dbPath)
+	}()
+
+	m := initialModel()
+	m.mode = "habits"
+	m.selected = 3
+
+	left := tea.KeyMsg{Type: tea.KeyLeft}
+	next, _ := m.Update(left)
+	m2 := next.(modelState)
+	if m2.selected != 2 {
+		t.Fatalf("expected selected 2, got %d", m2.selected)
+	}
+
+	right := tea.KeyMsg{Type: tea.KeyRight}
+	next2, _ := m2.Update(right)
+	m3 := next2.(modelState)
+	if m3.selected != 3 {
+		t.Fatalf("expected selected 3, got %d", m3.selected)
+	}
+}
