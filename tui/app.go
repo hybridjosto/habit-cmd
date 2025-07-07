@@ -148,6 +148,52 @@ func (m modelState) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		// handle text input modes first so keybindings don't swallow
+		// regular characters
+		if m.mode == "adding" || m.mode == "adding_task" {
+			switch {
+			case key.Matches(msg, keys.Enter):
+				if m.mode == "adding" && strings.TrimSpace(m.newHabitName) != "" {
+					habitID := strconv.FormatInt(time.Now().UnixNano(), 10)
+					model.AddHabit(habitID, strings.TrimSpace(m.newHabitName), m.newHabitType, make(map[string]string))
+					m.habits, _ = model.GetHabits()
+					m.mode = "habits"
+					m.newHabitName = ""
+				} else if m.mode == "adding_task" && strings.TrimSpace(m.newTaskName) != "" {
+					taskID := strconv.FormatInt(time.Now().UnixNano(), 10)
+					model.AddTask(taskID, strings.TrimSpace(m.newTaskName), "", "")
+					m.tasks, _ = model.GetTasks()
+					m.mode = "tasks"
+					m.newTaskName = ""
+				}
+			case key.Matches(msg, keys.Escape):
+				if m.mode == "adding" {
+					m.mode = "habits"
+					m.newHabitName = ""
+				} else {
+					m.mode = "tasks"
+					m.newTaskName = ""
+				}
+			case key.Matches(msg, keys.Backspace):
+				// ignore in non-input modes
+			case key.Matches(msg, keys.Space):
+				if m.mode == "adding" {
+					m.newHabitName += " "
+				} else {
+					m.newTaskName += " "
+				}
+			default:
+				if msg.Type == tea.KeyRunes && len(msg.Runes) > 0 {
+					if m.mode == "adding" {
+						m.newHabitName += msg.String()
+					} else {
+						m.newTaskName += msg.String()
+					}
+				}
+			}
+			return m, nil
+		}
+
 		// general keybindings via bubbletea key.Matches
 		switch {
 		case key.Matches(msg, keys.Left):
@@ -188,18 +234,6 @@ func (m modelState) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.mode == "choosing_habit_type" {
 				m.mode = "adding"
 				m.newHabitName = ""
-			} else if m.mode == "adding" && strings.TrimSpace(m.newHabitName) != "" {
-				habitID := strconv.FormatInt(time.Now().UnixNano(), 10)
-				model.AddHabit(habitID, strings.TrimSpace(m.newHabitName), m.newHabitType, make(map[string]string))
-				m.habits, _ = model.GetHabits()
-				m.mode = "habits"
-				m.newHabitName = ""
-			} else if m.mode == "adding_task" && strings.TrimSpace(m.newTaskName) != "" {
-				taskID := strconv.FormatInt(time.Now().UnixNano(), 10)
-				model.AddTask(taskID, strings.TrimSpace(m.newTaskName), "", "")
-				m.tasks, _ = model.GetTasks()
-				m.mode = "tasks"
-				m.newTaskName = ""
 			}
 		case key.Matches(msg, keys.N):
 			if m.mode == "habits" && len(m.habits) > 0 {
@@ -226,10 +260,6 @@ func (m modelState) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else if m.mode == "tasks" && len(m.tasks) > 0 {
 				model.ToggleTask(m.tasks[m.selectedTask].ID)
 				m.tasks, _ = model.GetTasks()
-			} else if m.mode == "adding" {
-				m.newHabitName += " "
-			} else if m.mode == "adding_task" {
-				m.newTaskName += " "
 			}
 		case key.Matches(msg, keys.A):
 			if m.mode == "habits" {
@@ -238,10 +268,6 @@ func (m modelState) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else if m.mode == "tasks" {
 				m.mode = "adding_task"
 				m.newTaskName = ""
-			} else if m.mode == "adding" {
-				m.newHabitName += "a"
-			} else if m.mode == "adding_task" {
-				m.newTaskName += "a"
 			}
 		case key.Matches(msg, keys.D):
 			if m.mode == "habits" && len(m.habits) > 0 {
@@ -260,38 +286,13 @@ func (m modelState) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, keys.Escape):
 			if m.showNotes {
 				m.showNotes = false
-			} else if m.mode == "adding" {
-				m.mode = "habits"
-				m.newHabitName = ""
-			} else if m.mode == "adding_task" {
-				m.mode = "tasks"
-				m.newTaskName = ""
 			}
 		case key.Matches(msg, keys.Backspace):
-			if m.mode == "adding" && len(m.newHabitName) > 0 {
-				m.newHabitName = m.newHabitName[:len(m.newHabitName)-1]
-			} else if m.mode == "adding_task" && len(m.newTaskName) > 0 {
-				m.newTaskName = m.newTaskName[:len(m.newTaskName)-1]
-			}
+			// ignore in non-input modes
 		case key.Matches(msg, keys.Q):
-			if m.mode != "adding" && m.mode != "adding_task" {
-				return m, tea.Quit
-			}
+			return m, tea.Quit
 		default:
-			// default character input for adding modes
-			if m.mode == "adding" && len(msg.String()) == 1 {
-				char := msg.String()
-				if (char >= "a" && char <= "z") || (char >= "A" && char <= "Z") || (char >= "0" && char <= "9") ||
-					char == "-" || char == "_" || char == "." || char == "," || char == "'" || char == "\"" {
-					m.newHabitName += char
-				}
-			} else if m.mode == "adding_task" && len(msg.String()) == 1 {
-				char := msg.String()
-				if (char >= "a" && char <= "z") || (char >= "A" && char <= "Z") || (char >= "0" && char <= "9") ||
-					char == "-" || char == "_" || char == "." || char == "," || char == "'" || char == "\"" {
-					m.newTaskName += char
-				}
-			}
+			// ignore other keys
 		}
 	}
 

@@ -55,3 +55,29 @@ func TestTabCyclesModes(t *testing.T) {
 		t.Fatalf("expected tasks, got %s", m3.mode)
 	}
 }
+
+func TestAddingTaskInput(t *testing.T) {
+	dbPath := "test.db"
+	if err := model.InitDB(dbPath); err != nil {
+		t.Fatalf("failed to init db: %v", err)
+	}
+	defer func() {
+		model.CloseDB()
+		os.Remove(dbPath)
+	}()
+
+	m := initialModel()
+	m.mode = "adding_task"
+
+	letters := []rune{'d', 'n', 'e', 'q', 'x'}
+	for _, r := range letters {
+		km := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}}
+		next, _ := m.Update(km)
+		m = next.(modelState)
+	}
+
+	expected := "dneqx"
+	if m.newTaskName != expected {
+		t.Fatalf("expected %s, got %s", expected, m.newTaskName)
+	}
+}
