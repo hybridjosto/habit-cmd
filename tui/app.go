@@ -51,7 +51,7 @@ var (
 // keybindings for application commands
 var keys = struct {
 	Left, Right, Up, Down, Tab, Enter, Escape, Backspace, Space,
-	N, E, A, D, Q key.Binding
+	N, E, A, D, Quit key.Binding
 }{
 	Left:      key.NewBinding(key.WithKeys("left"), key.WithHelp("←", "prev day")),
 	Right:     key.NewBinding(key.WithKeys("right"), key.WithHelp("→", "next day")),
@@ -66,7 +66,7 @@ var keys = struct {
 	E:         key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "edit note")),
 	A:         key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "add")),
 	D:         key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "delete")),
-	Q:         key.NewBinding(key.WithKeys("q"), key.WithHelp("q", "quit")),
+	Quit:      key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("ctrl+c", "quit")),
 }
 
 type modelState struct {
@@ -197,11 +197,11 @@ func (m modelState) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// general keybindings via bubbletea key.Matches
 		switch {
 		case key.Matches(msg, keys.Left):
-			if m.mode == "calendar" && m.selected > 0 {
+			if m.selected > 0 {
 				m.selected--
 			}
 		case key.Matches(msg, keys.Right):
-			if m.mode == "calendar" && m.selected < 6 {
+			if m.selected < len(m.dates)-1 {
 				m.selected++
 			}
 		case key.Matches(msg, keys.Up):
@@ -289,7 +289,7 @@ func (m modelState) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case key.Matches(msg, keys.Backspace):
 			// ignore in non-input modes
-		case key.Matches(msg, keys.Q):
+		case key.Matches(msg, keys.Quit):
 			return m, tea.Quit
 		default:
 			// ignore other keys
@@ -472,13 +472,13 @@ func (m modelState) View() string {
 
 	var controls string
 	if m.mode == "calendar" {
-		controls = "Calendar: ←/→ navigate | Tab: switch to habits | q: quit"
+		controls = "Calendar: ←/→ navigate days | Tab: switch to habits | ctrl+c: quit"
 	} else if m.mode == "habits" {
-		controls = "Habits: ↑/↓ navigate | Space: toggle | n: notes | e: edit | d: delete | a: add | Tab: tasks | q: quit"
+		controls = "Habits: ←/→ change day | ↑/↓ navigate | Space: toggle | n: notes | e: edit | d: delete | a: add | Tab: tasks | ctrl+c: quit"
 	} else if m.mode == "tasks" {
-		controls = "Tasks: ↑/↓ navigate | Space: toggle | d: delete | a: add | Tab: stats | q: quit"
+		controls = "Tasks: ←/→ change day | ↑/↓ navigate | Space: toggle | d: delete | a: add | Tab: stats | ctrl+c: quit"
 	} else if m.mode == "stats" {
-		controls = "Statistics: View habit streaks and progress | Tab: calendar | q: quit"
+		controls = "Statistics: ←/→ change day | View habit streaks and progress | Tab: calendar | ctrl+c: quit"
 	} else if m.mode == "choosing_habit_type" {
 		controls = "↑/↓ select type | Enter: next | Esc: cancel"
 	} else if m.mode == "adding" {
