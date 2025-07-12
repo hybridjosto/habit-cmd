@@ -100,3 +100,79 @@ func TestDeleteTask(t *testing.T) {
 		t.Fatalf("task not deleted")
 	}
 }
+
+func TestUpdateHabit(t *testing.T) {
+	teardown := setupTestDB(t)
+	defer teardown()
+
+	AddHabit("1", "meditate", "daily", nil)
+	updatedHabit := Habit{
+		ID:    "1",
+		Name:  "meditate daily",
+		Type:  "daily",
+		Notes: map[string]string{"Monday": "10 minutes"},
+	}
+	if err := UpdateHabit("1", updatedHabit); err != nil {
+		t.Fatalf("update habit: %v", err)
+	}
+	habits, _ := GetHabits()
+	if len(habits) != 1 || habits[0].Name != "meditate daily" || habits[0].Notes["Monday"] != "10 minutes" {
+		t.Fatalf("habit not updated: %+v", habits[0])
+	}
+}
+
+func TestGetHabitStreak(t *testing.T) {
+	teardown := setupTestDB(t)
+	defer teardown()
+
+	AddHabit("1", "walk", "general", nil)
+	today := time.Now()
+	ToggleHabitCompletion("1", today.Format("2006-01-02"))
+	ToggleHabitCompletion("1", today.AddDate(0, 0, -1).Format("2006-01-02"))
+	ToggleHabitCompletion("1", today.AddDate(0, 0, -2).Format("2006-01-02"))
+
+	streak, err := GetHabitStreak("1")
+	if err != nil {
+		t.Fatalf("get streak: %v", err)
+	}
+	if streak != 3 {
+		t.Fatalf("expected streak 3, got %d", streak)
+	}
+
+	// test with a break in the streak
+	AddHabit("2", "run", "general", nil)
+	ToggleHabitCompletion("2", today.Format("2006-01-02"))
+	ToggleHabitCompletion("2", today.AddDate(0, 0, -2).Format("2006-01-02"))
+	streak, _ = GetHabitStreak("2")
+	if streak != 1 {
+		t.Fatalf("expected streak 1 after a break, got %d", streak)
+	}
+}
+
+func TestGetHabitLongestStreak(t *testing.T) {
+	teardown := setupTestDB(t)
+	defer teardown()
+
+	AddHabit("1", "code", "general", nil)
+	today := time.Now()
+
+	// 5 day streak
+	ToggleHabitCompletion("1", today.Format("2006-01-02"))
+	ToggleHabitCompletion("1", today.AddDate(0, 0, -1).Format("2006-01-02"))
+	ToggleHabitCompletion("1", today.AddDate(0, 0, -2).Format("2006-01-02"))
+	ToggleHabitCompletion("1", today.AddDate(0, 0, -3).Format("2006-01-02"))
+	ToggleHabitCompletion("1", today.AddDate(0, 0, -4).Format("2006-01-02"))
+
+	// 3 day streak
+	ToggleHabitCompletion("1", today.AddDate(0, 0, -6).Format("2006-01-02"))
+	ToggleHabitCompletion("1", today.AddDate(0, 0, -7).Format("2006-01-02"))
+	ToggleHabitCompletion("1", today.AddDate(0, 0, -8).Format("2006-01-02"))
+
+	longest, err := GetHabitLongestStreak("1")
+	if err != nil {
+		t.Fatalf("get longest streak: %v", err)
+	}
+	if longest != 5 {
+		t.Fatalf("expected longest streak 5, got %d", longest)
+	}
+}
