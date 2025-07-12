@@ -17,10 +17,12 @@ var (
 )
 
 type Habit struct {
-	ID    string            `json:"id"`
-	Name  string            `json:"name"`
-	Type  string            `json:"type"` // "general" or "daily"
-	Notes map[string]string `json:"notes"`
+	ID          string            `json:"id"`
+	Name        string            `json:"name"`
+	Description string            `json:"description"`
+	Type        string            `json:"type"` // "general" or "daily"
+	Notes       map[string]string `json:"notes"`
+	Archived    bool              `json:"archived"`
 }
 
 type HabitCompletion struct {
@@ -66,15 +68,35 @@ func GetHabits() ([]Habit, error) {
 			if err := json.Unmarshal(v, &h); err != nil {
 				return err
 			}
-			habits = append(habits, h)
+			if !h.Archived {
+				habits = append(habits, h)
+			}
 			return nil
 		})
 	})
 	return habits, err
 }
 
-func AddHabit(id, name, habitType string, notes map[string]string) error {
-	h := Habit{ID: id, Name: name, Type: habitType, Notes: notes}
+func GetArchivedHabits() ([]Habit, error) {
+	var habits []Habit
+	err := db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket(habitsBucket)
+		return b.ForEach(func(k, v []byte) error {
+			var h Habit
+			if err := json.Unmarshal(v, &h); err != nil {
+				return err
+			}
+			if h.Archived {
+				habits = append(habits, h)
+			}
+			return nil
+		})
+	})
+	return habits, err
+}
+
+func AddHabit(id, name, description, habitType string, notes map[string]string) error {
+	h := Habit{ID: id, Name: name, Description: description, Type: habitType, Notes: notes, Archived: false}
 	data, err := json.Marshal(h)
 	if err != nil {
 		return err
@@ -127,7 +149,41 @@ func IsHabitCompleted(habitID, date string) (bool, error) {
 	return exists, err
 }
 
-func DeleteHabit(id string) error {
+func ArchiveHabit(id string) error {
+	return db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket(habitsBucket)
+		v := b.Get([]byte(id))
+		var h Habit
+		if err := json.Unmarshal(v, &h); err != nil {
+			return err
+		}
+		h.Archived = true
+		data, err := json.Marshal(h)
+		if err != nil {
+			return err
+		}
+		return b.Put([]byte(id), data)
+	})
+}
+
+func UnarchiveHabit(id string) error {
+	return db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket(habitsBucket)
+		v := b.Get([]byte(id))
+		var h Habit
+		if err := json.Unmarshal(v, &h); err != nil {
+			return err
+		}
+		h.Archived = false
+		data, err := json.Marshal(h)
+		if err != nil {
+			return err
+		}
+		return b.Put([]byte(id), data)
+	})
+}
+
+func DeleteHabitPermanently(id string) error {
 	return db.Update(func(tx *bolt.Tx) error {
 		habitsB := tx.Bucket(habitsBucket)
 		completionsB := tx.Bucket(completionsBucket)
